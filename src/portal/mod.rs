@@ -238,6 +238,7 @@ pub fn build_portal_router(ctx: SharedCtx) -> Router {
         .route("/api/exit-muos", post(handle_exit_muos))
         .route("/api/poweroff", post(handle_poweroff))
         .route("/api/uninstall", post(handle_uninstall))
+        .route("/api/dev/seed-stats", post(handle_dev_seed_stats))
         .fallback(handle_captive_redirect)
         .with_state(ctx)
 }
@@ -536,5 +537,32 @@ async fn handle_uninstall(
         });
     }
     Ok(Json(serde_json::json!({ "ok": true })))
+}
+
+#[derive(Deserialize)]
+struct DevSeedStatsRequest {
+    played_seconds_today: u64,
+    history: std::collections::BTreeMap<String, u64>,
+    game_play_seconds: std::collections::BTreeMap<String, u64>,
+}
+
+async fn handle_dev_seed_stats(
+    State(ctx): State<SharedCtx>,
+    Json(req): Json<DevSeedStatsRequest>,
+) -> Result<Json<PortalStateResponse>, (StatusCode, String)> {
+    let mut guard = ctx.lock().unwrap();
+    if !guard.dev_mode {
+        return Err((StatusCode::FORBIDDEN, "dev mode only".to_string()));
+    }
+    let local = guard.time.local_now(&guard.store.config.timezone);
+    guard.store.usage.current_date = local.date_str.clone();
+    guard.store.usage.played_seconds_today = req.played_seconds_today;
+    guard.store.usage.history = req.history;
+    guard.store.usage.game_play_seconds = req.game_play_seconds;
+    guard
+        .store
+        .save_usage(local.epoch_secs)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    Ok(Json(guard.build_portal_state()))
 }
 
