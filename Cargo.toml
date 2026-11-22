@@ -1,0 +1,25 @@
+[package]
+name = "yasumu"
+version = "0.1.0"
+edition = "2021"
+description = "yasumuOS — Playtime Pacing & Minimalist Overlay for muOS Handhelds"
+
+[dependencies]
+anyhow = "1.0.104"
+axum = "0.7.9"
+chrono = { version = "0.4.45", features = ["serde"] }
+chrono-tz = "0.10.4"
+clap = { version = "4.6.7", features = ["derive"] }
+constant_time_eq = "0.4.2"
+fastrand = "2.5.0"
+image = { version = "0.25.10", default-features = false, features = ["png", "bmp"] }
+libc = "0.2.191"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+tiny-skia = "0.11.4"
+tokio = { version = "1.54.1", features = ["full"] }
+ttf-parser = "0.24.1"
+walkdir = "2.5.0"
+
+[dev-dependencies]
+tempfile = "3.27.0"

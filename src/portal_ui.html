@@ -1,0 +1,838 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>yasumuOS</title>
+<style>
+/*__PORTAL_CSS__*/
+</style>
+</head>
+<body>
+
+<header>
+  <span class="brand-mark">YASUMU</span>
+  <span id="deviceStatusPill" class="status-pill"><span id="deviceStatusText">—</span></span>
+</header>
+
+<div id="firstBootBanner" class="banner-warn" data-i18n="first_boot"></div>
+
+<nav class="tabs" role="tablist">
+  <button class="tab-btn active" data-tab="overview" onclick="switchTab('overview')" data-i18n="tab_overview">Overview</button>
+  <button class="tab-btn" data-tab="games" onclick="switchTab('games')" data-i18n="tab_games">Games</button>
+  <button class="tab-btn" data-tab="schedule" onclick="switchTab('schedule')" data-i18n="tab_schedule">Schedule</button>
+  <button class="tab-btn" data-tab="system" onclick="switchTab('system')" data-i18n="tab_system">System</button>
+</nav>
+
+<div id="toast" class="toast"></div>
+
+<!-- TAB 1: OVERVIEW (Daily use) -->
+<div id="panel-overview" class="tab-panel active">
+  <div class="hero">
+    <div id="heroState" class="hero-state"></div>
+    <div id="heroTime" class="hero-time">0m</div>
+    <div id="heroSub" class="hero-sub"></div>
+    <div class="hero-actions">
+      <button class="btn-accent" onclick="grantBonus(15)" data-i18n="btn_bonus">+15m Bonus</button>
+    </div>
+  </div>
+
+  <div class="block">
+    <div class="block-head">
+      <span class="block-title" data-i18n="sec_history">7-Day Activity</span>
+      <span id="weekTotal" class="block-meta">0m</span>
+    </div>
+    <div id="historyBars" class="hist-list"></div>
+  </div>
+
+  <div id="topGamesBlock" class="block" style="display:none;">
+    <div class="block-head">
+      <span class="block-title" data-i18n="sec_top_games">Most Played</span>
+    </div>
+    <div id="topGamesList" class="hist-list"></div>
+  </div>
+</div>
+
+<!-- TAB 2: GAMES (Occasional updates) -->
+<div id="panel-games" class="tab-panel">
+  <div class="row-between" style="margin-bottom:12px;">
+    <span class="block-title"><span data-i18n="sec_games">Games</span> · <span id="allowedCount">0</span>/<span id="totalCount">0</span></span>
+    <div style="display:flex; gap:6px;">
+      <button class="btn-keycap btn-sm" onclick="toggleAllGames(true)" data-i18n="btn_allow_all">Allow All</button>
+      <button class="btn-keycap btn-sm" onclick="toggleAllGames(false)" data-i18n="btn_block_all">Block All</button>
+    </div>
+  </div>
+
+  <input type="text" id="gameSearch" class="search-bar" oninput="renderGames()">
+  <div id="gameList" class="game-list"></div>
+
+  <div style="margin-top:16px; margin-bottom:20px;">
+    <button class="btn-accent btn-full" onclick="saveGames()" data-i18n="btn_save_games">Save Games</button>
+  </div>
+
+  <div class="block">
+    <div class="block-head">
+      <span class="block-title" data-i18n="sec_upload_rom">Upload ROM</span>
+    </div>
+    <div style="display:flex; gap:8px; align-items:center;">
+      <select id="uploadSystem" style="flex:1;">
+        <option value="AUTO" data-i18n="upload_auto">Auto-detect system</option>
+        <option value="GBA">GBA</option>
+        <option value="GBC">GBC</option>
+        <option value="GB">GB</option>
+        <option value="SNES">SNES</option>
+        <option value="NES">NES</option>
+        <option value="MD">MD</option>
+        <option value="SMS">SMS</option>
+        <option value="GG">GG</option>
+        <option value="PCE">PCE</option>
+        <option value="PS1">PS1</option>
+        <option value="N64">N64</option>
+        <option value="NDS">NDS</option>
+      </select>
+      <input type="file" id="romUploadInput" multiple style="display:none;" onchange="uploadRoms(this.files)">
+      <button id="uploadBtn" class="btn-keycap btn-sm" style="white-space:nowrap;" onclick="document.getElementById('romUploadInput').click()" data-i18n="btn_upload_rom">Choose Files</button>
+    </div>
+  </div>
+
+  <div class="block">
+    <div class="block-head">
+      <span class="block-title" data-i18n="sec_covers">Box Art</span>
+    </div>
+    <div class="row-between">
+      <span id="scrapeStatus" class="hint-text" style="margin:0; font-size:12px;"></span>
+      <button id="scrapeBtn" class="btn-keycap btn-sm" onclick="scrapeCovers()" data-i18n="btn_scrape">Download Covers</button>
+    </div>
+  </div>
+
+  <div class="block">
+    <div class="block-head">
+      <span class="block-title" data-i18n="sec_screenshots">Screenshots</span>
+      <span id="screenshotCount" class="block-meta">0</span>
+    </div>
+    <div class="row-between">
+      <span id="screenshotHint" class="hint-text" style="margin:0; font-size:12px;" data-i18n="screenshots_hint"></span>
+      <button id="browseShotsBtn" class="btn-keycap btn-sm" onclick="openScreenshots()" data-i18n="btn_browse">Browse</button>
+    </div>
+  </div>
+</div>
+
+<!-- TAB 3: SCHEDULE (Occasional updates) -->
+<div id="panel-schedule" class="tab-panel">
+  <div class="block">
+    <div class="block-head">
+      <span class="block-title" data-i18n="sec_daily_limits">Daily Limits (min)</span>
+      <label class="switch">
+        <input type="checkbox" id="quota_enabled" onchange="onToggleQuotaUi()">
+        <span class="slider"></span>
+      </label>
+    </div>
+    <div id="quotaFields">
+      <div style="display:flex; justify-content:flex-end; gap:6px; margin-bottom:10px;">
+        <button class="btn-keycap btn-sm" onclick="applyPreset(60, 90)">60 / 90</button>
+        <button class="btn-keycap btn-sm" onclick="applyPreset(30, 45)">30 / 45</button>
+      </div>
+      <div class="days-grid">
+        <div class="day-cell"><label data-i18n="day_mon">MON</label><input type="number" id="q_mon" min="0" max="240"></div>
+        <div class="day-cell"><label data-i18n="day_tue">TUE</label><input type="number" id="q_tue" min="0" max="240"></div>
+        <div class="day-cell"><label data-i18n="day_wed">WED</label><input type="number" id="q_wed" min="0" max="240"></div>
+        <div class="day-cell"><label data-i18n="day_thu">THU</label><input type="number" id="q_thu" min="0" max="240"></div>
+        <div class="day-cell"><label data-i18n="day_fri">FRI</label><input type="number" id="q_fri" min="0" max="240"></div>
+        <div class="day-cell"><label data-i18n="day_sat">SAT</label><input type="number" id="q_sat" min="0" max="240"></div>
+        <div class="day-cell"><label data-i18n="day_sun">SUN</label><input type="number" id="q_sun" min="0" max="240"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="block">
+    <div class="block-head">
+      <span class="block-title" data-i18n="sec_bedtime">Bedtime Lock</span>
+      <label class="switch">
+        <input type="checkbox" id="bed_enabled" onchange="onToggleBedtimeUi()">
+        <span class="slider"></span>
+      </label>
+    </div>
+    <div id="bedFields" class="two-col">
+      <div>
+        <label class="field-lbl" data-i18n="lbl_wake">Wake Time</label>
+        <input type="time" id="bed_wake" value="07:00">
+      </div>
+      <div>
+        <label class="field-lbl" data-i18n="lbl_sleep">Bed Time</label>
+        <input type="time" id="bed_sleep" value="20:00">
+      </div>
+    </div>
+  </div>
+
+  <button class="btn-accent btn-full" onclick="saveSchedule()" data-i18n="btn_save_schedule">Save Schedule</button>
+</div>
+
+<!-- TAB 4: SYSTEM (One-and-done setup) -->
+<div id="panel-system" class="tab-panel">
+  <div class="block">
+    <div class="block-head">
+      <span class="block-title" data-i18n="sec_lang">Language</span>
+      <span class="block-meta" data-i18n="lbl_lang_scope">Launcher &amp; RetroArch</span>
+    </div>
+    <select id="langSelect" onchange="saveLanguage()">
+      <option value="en">English</option>
+      <option value="fr">Français</option>
+      <option value="es">Español</option>
+      <option value="de">Deutsch</option>
+      <option value="ja">日本語</option>
+      <option value="zh">简体中文</option>
+    </select>
+  </div>
+
+  <div class="block">
+    <div class="block-head">
+      <span class="block-title" data-i18n="sec_pin">Parent PIN</span>
+    </div>
+    <div class="input-action">
+      <input type="password" id="newPin" inputmode="numeric" maxlength="4">
+      <button class="btn-accent" onclick="savePin()" data-i18n="btn_update_pin">Update</button>
+    </div>
+  </div>
+
+  <div class="block">
+    <div class="block-head">
+      <span class="block-title" data-i18n="sec_wifi">Home Wi-Fi</span>
+      <span id="wifiModeBadge" class="block-meta"></span>
+    </div>
+    <div class="hint-text" data-i18n="wifi_hint"></div>
+    <div class="two-col" style="margin-bottom:10px;">
+      <input type="text" id="homeWifiSsid">
+      <input type="password" id="homeWifiPass">
+    </div>
+    <div style="display:flex; gap:8px;">
+      <button class="btn-accent btn-sm" onclick="saveHomeWifi()" data-i18n="btn_save_wifi">Save Wi-Fi</button>
+      <button class="btn-keycap btn-sm" onclick="clearHomeWifi()" data-i18n="btn_clear_wifi">Offline AP Only</button>
+    </div>
+  </div>
+
+  <div class="block">
+    <div class="block-head">
+      <span class="block-title" data-i18n="sec_maintenance">Maintenance</span>
+      <span id="appVersion" class="block-meta"></span>
+    </div>
+    <div class="row-between" style="margin-bottom:14px;">
+      <span style="font-size:14px; font-weight:600; color:var(--text);" data-i18n="lbl_logging">Debug Logging</span>
+      <label class="switch">
+        <input type="checkbox" id="logging_enabled" onchange="saveLogging(this.checked)">
+        <span class="slider"></span>
+      </label>
+    </div>
+    <div style="display:flex; flex-direction:column; gap:8px;">
+      <button class="btn-keycap btn-full" onclick="exitToMuos()" data-i18n="btn_exit_muos">Exit to Standard muOS (1 Session)</button>
+      <button class="btn-keycap btn-full" onclick="powerOffDevice()" data-i18n="btn_poweroff">Power Off</button>
+      <button class="btn-keycap btn-full" onclick="uninstallYasumu()" data-i18n="btn_uninstall">Uninstall yasumuOS</button>
+    </div>
+  </div>
+</div>
+
+<!-- SUB-SCREEN: SCREENSHOTS GALLERY (Paginated + Lazy-Loaded) -->
+<div id="panel-screenshots" class="tab-panel">
+  <div class="row-between" style="margin-bottom:14px;">
+    <button class="btn-keycap btn-sm" onclick="switchTab('games')">← <span data-i18n="btn_back">Back</span></button>
+    <span class="block-title"><span data-i18n="sec_screenshots">Screenshots</span> · <span id="galleryCount">0</span></span>
+  </div>
+  <div id="screenshotGrid" class="shot-grid"></div>
+  <div id="screenshotEmpty" class="hint-text" style="display:none; padding:24px 0; text-align:center;"></div>
+  <div id="loadMoreWrap" style="margin-top:14px; display:none;">
+    <button id="loadMoreBtn" class="btn-keycap btn-full" onclick="loadMoreScreenshots()" data-i18n="btn_load_more">Load More</button>
+  </div>
+</div>
+
+<script>
+/*__PORTAL_I18N__*/
+
+let appState = /*__INITIAL_STATE__*/null;
+let activeTab = 'overview';
+let expandedGames = {};
+
+function dict() {
+  const l = (appState && appState.language) || 'en';
+  return I18N[l] || I18N.en;
+}
+
+function updateAmbientGlow() {
+  let glow = 'rgba(255, 102, 0, 0.16)';
+  let accent = 'var(--orange)';
+  let onAccent = '#090B10';
+  if (activeTab === 'games') {
+    glow = 'rgba(251, 191, 36, 0.15)';
+    accent = 'var(--amber)';
+  } else if (activeTab === 'schedule') {
+    glow = 'rgba(129, 140, 248, 0.18)';
+    accent = 'var(--indigo)';
+  } else if (activeTab === 'system') {
+    glow = 'rgba(16, 185, 129, 0.16)';
+    accent = 'var(--emerald)';
+    onAccent = '#042F2E';
+  }
+  document.documentElement.style.setProperty('--glow', glow);
+  document.documentElement.style.setProperty('--tab-accent', accent);
+  document.documentElement.style.setProperty('--tab-on-accent', onAccent);
+}
+
+function switchTab(tab) {
+  activeTab = tab;
+  document.querySelectorAll('.tab-btn').forEach(b => {
+    b.classList.toggle('active', b.getAttribute('data-tab') === tab);
+  });
+  document.querySelectorAll('.tab-panel').forEach(p => {
+    p.classList.toggle('active', p.id === 'panel-' + tab);
+  });
+  updateAmbientGlow();
+}
+
+function applyTranslations() {
+  const d = dict();
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    const k = el.getAttribute('data-i18n');
+    if (d[k]) el.textContent = d[k];
+  });
+  document.getElementById('gameSearch').placeholder = d.ph_search;
+  document.getElementById('newPin').placeholder = d.ph_pin;
+  document.getElementById('homeWifiSsid').placeholder = d.ph_ssid;
+  document.getElementById('homeWifiPass').placeholder = d.ph_pass;
+}
+
+function showToast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.style.display = 'block';
+  setTimeout(() => { el.style.display = 'none'; }, 2200);
+}
+
+async function syncClock() {
+  try {
+    let tz = 'UTC';
+    try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'; } catch (_) {}
+    const res = await fetch('/api/sync-time', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ timestamp_ms: Date.now(), timezone: tz })
+    });
+    if (res.ok) {
+      appState = await res.json();
+      renderAll();
+    }
+  } catch (_) {}
+}
+
+async function loadState() {
+  const res = await fetch('/api/state');
+  appState = await res.json();
+  renderAll();
+}
+
+function onToggleQuotaUi() {
+  const on = document.getElementById('quota_enabled').checked;
+  document.getElementById('quotaFields').classList.toggle('fields-dimmed', !on);
+}
+
+function onToggleBedtimeUi() {
+  const on = document.getElementById('bed_enabled').checked;
+  document.getElementById('bedFields').classList.toggle('fields-dimmed', !on);
+}
+
+function renderAll() {
+  if (!appState) return;
+  applyTranslations();
+  updateAmbientGlow();
+  const d = dict();
+
+  document.getElementById('firstBootBanner').style.display = appState.has_pin ? 'none' : 'block';
+
+  const quotaEnabled = appState.quota_enabled !== false;
+  const bedtimeEnabled = !!(appState.bedtime && appState.bedtime.enabled);
+  const controlsActive = quotaEnabled || bedtimeEnabled;
+  const playedMin = Math.floor((appState.played_seconds_today || 0) / 60);
+  const remSecs = appState.effective_remaining_seconds || 0;
+  const unlimited = !controlsActive || remSecs > 86400 * 365;
+  const remMin = unlimited ? 0 : Math.ceil(remSecs / 60);
+  const k = (appState.lock_status && appState.lock_status.kind) || 'unlocked';
+
+  // Top-right permanent device status: uses current tab accent, except red warning when quota system is turned off
+  const pill = document.getElementById('deviceStatusPill');
+  const pillText = document.getElementById('deviceStatusText');
+  pill.className = 'status-pill';
+  if (!quotaEnabled) {
+    pill.classList.add('disabled-warn');
+    pillText.textContent = d.pill_off;
+  } else if (k === 'bedtime_active') {
+    pillText.textContent = d.pill_bedtime;
+  } else if (k === 'quota_reached') {
+    pillText.textContent = d.pill_quota;
+  } else if (k === 'clock_sync_required' || k === 'tamper_locked') {
+    pillText.textContent = d.pill_clock;
+  } else {
+    pillText.textContent = d.pill_active;
+  }
+
+  const heroState = document.getElementById('heroState');
+  const heroTime = document.getElementById('heroTime');
+  if (k === 'bedtime_active') {
+    heroState.textContent = d.st_bedtime;
+    heroTime.textContent = appState.bedtime.wake_time;
+  } else if (k === 'clock_sync_required' || k === 'tamper_locked') {
+    heroState.textContent = d.st_clock;
+    heroTime.textContent = '—';
+  } else if (k === 'quota_reached') {
+    heroState.textContent = d.st_quota;
+    heroTime.textContent = '0m';
+  } else if (unlimited || !quotaEnabled) {
+    heroState.textContent = d.st_unlimited;
+    heroTime.textContent = '∞';
+  } else {
+    heroState.textContent = d.st_unlocked;
+    heroTime.textContent = remMin + 'm';
+  }
+
+  const subParts = [`${d.sub_played} ${playedMin}m`];
+  if (!quotaEnabled) subParts.push(d.sub_quota_off);
+  subParts.push(bedtimeEnabled
+    ? `${d.sub_bedtime} ${appState.bedtime.bed_time}–${appState.bedtime.wake_time}`
+    : d.sub_bedtime_off);
+  document.getElementById('heroSub').textContent = subParts.join('  ·  ');
+
+  const q = appState.weekly_quotas;
+  ['mon','tue','wed','thu','fri','sat','sun'].forEach(day => {
+    document.getElementById('q_' + day).value = q[day];
+  });
+  document.getElementById('quota_enabled').checked = quotaEnabled;
+  onToggleQuotaUi();
+
+  document.getElementById('bed_enabled').checked = bedtimeEnabled;
+  onToggleBedtimeUi();
+  document.getElementById('bed_wake').value = appState.bedtime.wake_time;
+  document.getElementById('bed_sleep').value = appState.bedtime.bed_time;
+  document.getElementById('langSelect').value = appState.language || 'en';
+  document.getElementById('homeWifiSsid').value = appState.home_wifi_ssid || '';
+  document.getElementById('logging_enabled').checked = !!appState.logging_enabled;
+  document.getElementById('appVersion').textContent = appState.version || '';
+
+  const isHomeWifi = appState.portal_mode === 'home_wifi';
+  document.getElementById('wifiModeBadge').textContent = isHomeWifi ? d.mode_home : d.mode_ap;
+  const scrapeBtn = document.getElementById('scrapeBtn');
+  scrapeBtn.disabled = !isHomeWifi;
+  document.getElementById('scrapeStatus').textContent = isHomeWifi ? d.scrape_ready : d.scrape_need_wifi;
+
+  renderGames();
+  renderHistory();
+  renderTopGames();
+  renderScreenshots();
+}
+
+function renderGames() {
+  if (!appState) return;
+  const d = dict();
+  const list = document.getElementById('gameList');
+  const query = (document.getElementById('gameSearch').value || '').toLowerCase();
+  list.innerHTML = '';
+
+  const allowedCount = appState.games.filter(g => g.allowed).length;
+  document.getElementById('allowedCount').textContent = allowedCount;
+  document.getElementById('totalCount').textContent = appState.games.length;
+
+  if (appState.games.length === 0) {
+    list.innerHTML = `<div class="hint-text" style="padding:12px 2px;">${escapeHtml(d.no_roms)}</div>`;
+    return;
+  }
+
+  appState.games.forEach((g, idx) => {
+    const hay = (g.display_title + ' ' + g.id + ' ' + g.system_badge).toLowerCase();
+    if (query && !hay.includes(query)) return;
+    const isOpen = !!expandedGames[g.id];
+
+    const item = document.createElement('div');
+    item.className = 'game-row';
+    item.innerHTML = `
+      <div class="game-top">
+        <div class="game-left">
+          <span class="sys-tag">${escapeHtml(g.system_badge)}</span>
+          <span class="game-title">${escapeHtml(g.display_title)}</span>
+        </div>
+        <div class="game-controls">
+          <button class="edit-toggle ${isOpen ? 'open' : ''}" onclick="toggleGameEdit('${escapeJs(g.id)}')">${escapeHtml(d.btn_edit)}</button>
+          <label class="switch">
+            <input type="checkbox" ${g.allowed ? 'checked' : ''} onchange="onToggleGame(${idx}, this.checked)">
+            <span class="slider"></span>
+          </label>
+        </div>
+      </div>
+      <div class="game-extra ${isOpen ? 'open' : ''}">
+        <input type="text" placeholder="${escapeHtml(g.default_title)}" value="${escapeHtml(g.custom_title || '')}" oninput="onEditTitle(${idx}, this.value)">
+        <input type="text" placeholder="${escapeHtml(g.core_so)}" value="${escapeHtml(g.core_override || '')}" oninput="onEditCore(${idx}, this.value)">
+      </div>
+    `;
+    list.appendChild(item);
+  });
+}
+
+function toggleGameEdit(id) {
+  expandedGames[id] = !expandedGames[id];
+  renderGames();
+}
+
+function renderHistory() {
+  const container = document.getElementById('historyBars');
+  container.innerHTML = '';
+  const hist = appState.history_7d || [];
+  let maxMin = 60;
+  let totalMin = 0;
+  hist.forEach(h => {
+    const m = Math.round(h.seconds / 60);
+    totalMin += m;
+    if (m > maxMin) maxMin = m;
+  });
+  document.getElementById('weekTotal').textContent = totalMin + 'm';
+
+  hist.forEach(h => {
+    const mins = Math.round(h.seconds / 60);
+    const pct = Math.min(100, Math.round((mins / maxMin) * 100));
+    const shortDate = (h.date || '').slice(5); // MM-DD
+    const row = document.createElement('div');
+    row.className = 'hist-row';
+    row.innerHTML = `
+      <span style="color:var(--muted);">${escapeHtml(shortDate)}</span>
+      <div class="hist-track"><div class="hist-fill" style="width:${pct}%;"></div></div>
+      <span style="text-align:right; color:var(--text);">${mins}m</span>
+    `;
+    container.appendChild(row);
+  });
+}
+
+function onToggleGame(idx, checked) {
+  appState.games[idx].allowed = checked;
+  document.getElementById('allowedCount').textContent = appState.games.filter(g => g.allowed).length;
+}
+function onEditTitle(idx, val) {
+  appState.games[idx].custom_title = val.trim() ? val : null;
+  appState.games[idx].display_title = val.trim() ? val.trim() : appState.games[idx].default_title;
+}
+function onEditCore(idx, val) {
+  appState.games[idx].core_override = val.trim() ? val.trim() : null;
+}
+function toggleAllGames(allow) {
+  if (!appState) return;
+  appState.games.forEach(g => { g.allowed = allow; });
+  renderGames();
+}
+function applyPreset(weekdayMin, weekendMin) {
+  ['mon','tue','wed','thu','fri'].forEach(d => { document.getElementById('q_' + d).value = weekdayMin; });
+  ['sat','sun'].forEach(d => { document.getElementById('q_' + d).value = weekendMin; });
+}
+
+async function saveGames() {
+  const updates = appState.games.map(g => ({
+    id: g.id, allowed: g.allowed, custom_title: g.custom_title || null, core_override: g.core_override || null
+  }));
+  const res = await fetch('/api/games', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ games: updates })
+  });
+  if (res.ok) { appState = await res.json(); renderAll(); showToast(dict().toast_saved); }
+}
+
+function clampQuota(id) {
+  const v = parseInt(document.getElementById(id).value || '0', 10);
+  return Math.max(0, Math.min(240, isNaN(v) ? 0 : v));
+}
+
+async function saveSchedule() {
+  const payload = {
+    quota_enabled: document.getElementById('quota_enabled').checked,
+    weekly_quotas: {
+      mon: clampQuota('q_mon'),
+      tue: clampQuota('q_tue'),
+      wed: clampQuota('q_wed'),
+      thu: clampQuota('q_thu'),
+      fri: clampQuota('q_fri'),
+      sat: clampQuota('q_sat'),
+      sun: clampQuota('q_sun')
+    },
+    bedtime: {
+      enabled: document.getElementById('bed_enabled').checked,
+      wake_time: document.getElementById('bed_wake').value || '07:00',
+      bed_time: document.getElementById('bed_sleep').value || '20:00'
+    }
+  };
+  const res = await fetch('/api/schedule', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+  });
+  if (res.ok) { appState = await res.json(); renderAll(); showToast(dict().toast_saved); }
+}
+
+async function grantBonus(minutes) {
+  const res = await fetch('/api/bonus', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ minutes })
+  });
+  if (res.ok) { appState = await res.json(); renderAll(); showToast(dict().toast_bonus); }
+}
+
+async function saveHomeWifi() {
+  const ssid = (document.getElementById('homeWifiSsid').value || '').trim();
+  const passphrase = (document.getElementById('homeWifiPass').value || '').trim();
+  if (!ssid) return;
+  const res = await fetch('/api/wifi', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ssid, passphrase: passphrase || null })
+  });
+  if (res.ok) { document.getElementById('homeWifiPass').value = ''; appState = await res.json(); renderAll(); showToast(dict().toast_wifi); }
+}
+
+async function clearHomeWifi() {
+  const res = await fetch('/api/wifi', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ssid: null, passphrase: null })
+  });
+  if (res.ok) { appState = await res.json(); renderAll(); showToast(dict().toast_wifi); }
+}
+
+async function scrapeCovers() {
+  const btn = document.getElementById('scrapeBtn');
+  const statusEl = document.getElementById('scrapeStatus');
+  btn.disabled = true;
+  statusEl.textContent = dict().scrape_busy;
+  try {
+    const res = await fetch('/api/scrape-covers', { method: 'POST' });
+    if (res.ok) {
+      const r = await res.json();
+      statusEl.textContent = `${r.downloaded} OK · ${r.skipped} existing · ${r.failed} missing`;
+      showToast(`${r.downloaded} OK`);
+    }
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function saveLanguage() {
+  const language = document.getElementById('langSelect').value || 'en';
+  const res = await fetch('/api/language', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ language })
+  });
+  if (res.ok) { appState = await res.json(); renderAll(); showToast(language.toUpperCase()); }
+}
+
+async function savePin() {
+  const pin = (document.getElementById('newPin').value || '').trim();
+  if (!/^\d{4}$/.test(pin)) { alert(dict().err_pin); return; }
+  const res = await fetch('/api/pin', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pin })
+  });
+  if (res.ok) { document.getElementById('newPin').value = ''; appState = await res.json(); renderAll(); showToast(dict().toast_pin); }
+}
+
+async function saveLogging(enabled) {
+  const res = await fetch('/api/logging', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled: !!enabled })
+  });
+  if (res.ok) { appState = await res.json(); renderAll(); showToast(dict().toast_saved); }
+}
+
+async function exitToMuos() {
+  const res = await fetch('/api/exit-muos', { method: 'POST' });
+  if (res.ok) showToast(dict().toast_muos);
+}
+
+async function powerOffDevice() {
+  const res = await fetch('/api/poweroff', { method: 'POST' });
+  if (res.ok) showToast(dict().toast_poweroff);
+}
+
+async function uninstallYasumu() {
+  if (!window.confirm(dict().confirm_uninstall)) return;
+  const res = await fetch('/api/uninstall', { method: 'POST' });
+  if (res.ok) showToast(dict().toast_uninstall);
+}
+
+function fmtDuration(secs) {
+  const m = Math.max(1, Math.round(secs / 60));
+  if (m < 60) return m + 'm';
+  const h = Math.floor(m / 60);
+  const rem = m % 60;
+  return rem ? `${h}h ${rem}m` : `${h}h`;
+}
+
+function renderTopGames() {
+  const block = document.getElementById('topGamesBlock');
+  const list = document.getElementById('topGamesList');
+  const items = (appState && appState.top_games) || [];
+  if (!items.length) {
+    block.style.display = 'none';
+    return;
+  }
+  block.style.display = 'block';
+  const maxSecs = Math.max(...items.map(x => x.seconds), 1);
+  list.innerHTML = '';
+  items.forEach((g, idx) => {
+    const pct = Math.max(6, Math.round((g.seconds / maxSecs) * 100));
+    const row = document.createElement('div');
+    row.className = 'top-row';
+    row.innerHTML = `
+      <div class="top-head">
+        <div class="top-name">
+          <span class="top-rank">#${idx + 1}</span>
+          <span>${escapeHtml(g.title)}</span>
+        </div>
+        <span class="hist-val">${fmtDuration(g.seconds)}</span>
+      </div>
+      <div class="hist-track"><div class="hist-fill" style="width:${pct}%"></div></div>
+    `;
+    list.appendChild(row);
+  });
+}
+
+let shotState = { items: [], total: 0, loading: false };
+const SHOT_PAGE_SIZE = 12;
+
+function renderScreenshots() {
+  const d = dict();
+  const count = (appState && appState.screenshot_count) || 0;
+  document.getElementById('screenshotCount').textContent = count;
+  document.getElementById('galleryCount').textContent = count;
+  const btn = document.getElementById('browseShotsBtn');
+  btn.disabled = count === 0;
+  document.getElementById('screenshotHint').textContent = d.screenshots_hint;
+}
+
+async function openScreenshots() {
+  activeTab = 'games';
+  document.querySelectorAll('.tab-btn').forEach(b => {
+    b.classList.toggle('active', b.getAttribute('data-tab') === 'games');
+  });
+  document.querySelectorAll('.tab-panel').forEach(p => {
+    p.classList.toggle('active', p.id === 'panel-screenshots');
+  });
+  updateAmbientGlow();
+  shotState = { items: [], total: 0, loading: false };
+  await loadMoreScreenshots();
+}
+
+async function loadMoreScreenshots() {
+  if (shotState.loading) return;
+  shotState.loading = true;
+  try {
+    const offset = shotState.items.length;
+    const res = await fetch(`/api/screenshots?offset=${offset}&limit=${SHOT_PAGE_SIZE}`);
+    if (res.ok) {
+      const page = await res.json();
+      shotState.total = page.total;
+      shotState.items = shotState.items.concat(page.items || []);
+      if (appState) appState.screenshot_count = page.total;
+      renderScreenshots();
+      renderScreenshotGallery();
+    }
+  } finally {
+    shotState.loading = false;
+  }
+}
+
+function renderScreenshotGallery() {
+  const d = dict();
+  const grid = document.getElementById('screenshotGrid');
+  const empty = document.getElementById('screenshotEmpty');
+  const loadMoreWrap = document.getElementById('loadMoreWrap');
+  document.getElementById('galleryCount').textContent = shotState.total;
+  grid.innerHTML = '';
+  if (!shotState.items.length) {
+    empty.style.display = 'block';
+    empty.textContent = d.no_screenshots;
+    loadMoreWrap.style.display = 'none';
+    return;
+  }
+  empty.style.display = 'none';
+  shotState.items.forEach(s => {
+    const enc = encodeURIComponent(s.name);
+    const card = document.createElement('div');
+    card.className = 'shot-card';
+    card.innerHTML = `
+      <a href="/api/screenshots/${enc}?inline=1" target="_blank" rel="noopener">
+        <img src="/api/screenshots/${enc}?inline=1" loading="lazy" alt="${escapeHtml(s.name)}">
+      </a>
+      <div class="shot-card-body">
+        <div class="shot-name" title="${escapeHtml(s.name)}">${escapeHtml(s.name)}</div>
+        <div class="shot-actions">
+          <a class="btn-keycap" href="/api/screenshots/${enc}" download="${escapeHtml(s.name)}">${escapeHtml(d.btn_download)}</a>
+          <button class="btn-keycap" onclick="deleteScreenshot('${escapeJs(s.name)}')">${escapeHtml(d.btn_delete)}</button>
+        </div>
+      </div>
+    `;
+    grid.appendChild(card);
+  });
+  loadMoreWrap.style.display = shotState.items.length < shotState.total ? 'block' : 'none';
+}
+
+async function deleteScreenshot(name) {
+  const d = dict();
+  if (!window.confirm(d.confirm_delete_shot)) return;
+  const res = await fetch('/api/screenshots/' + encodeURIComponent(name), { method: 'DELETE' });
+  if (res.ok) {
+    const data = await res.json();
+    shotState.items = shotState.items.filter(x => x.name !== name);
+    shotState.total = data.screenshot_count;
+    if (appState) appState.screenshot_count = data.screenshot_count;
+    renderScreenshots();
+    renderScreenshotGallery();
+    showToast(d.toast_deleted);
+  }
+}
+
+async function uploadRoms(fileList) {
+  const files = Array.from(fileList || []);
+  const input = document.getElementById('romUploadInput');
+  if (!files.length) return;
+  const d = dict();
+  const btn = document.getElementById('uploadBtn');
+  const sys = document.getElementById('uploadSystem').value || 'AUTO';
+  btn.disabled = true;
+  btn.textContent = d.upload_busy;
+  let uploaded = 0;
+  let lastErr = '';
+  for (const file of files) {
+    try {
+      const url = `/api/upload-rom?system=${encodeURIComponent(sys)}&filename=${encodeURIComponent(file.name)}`;
+      const res = await fetch(url, { method: 'POST', body: file });
+      if (res.ok) {
+        appState = await res.json();
+        uploaded++;
+      } else {
+        lastErr = await res.text();
+      }
+    } catch (e) {
+      lastErr = String(e);
+    }
+  }
+  btn.disabled = false;
+  btn.textContent = d.btn_upload_rom;
+  input.value = '';
+  if (uploaded > 0) {
+    renderAll();
+    showToast(`${d.toast_uploaded} (${uploaded})`);
+  } else if (lastErr) {
+    showToast(lastErr);
+  }
+}
+
+function escapeHtml(s) {
+  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function escapeJs(s) {
+  return String(s || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+}
+
+(async function init() {
+  const hashTab = (location.hash || '').replace('#', '');
+  if (hashTab === 'screenshots') {
+    await openScreenshots();
+  } else if (['overview','games','schedule','system'].includes(hashTab)) {
+    switchTab(hashTab);
+  }
+  if (appState) {
+    renderAll();
+  }
+  await syncClock();
+  if (!appState) await loadState();
+})();
+</script>
+</body>
+</html>

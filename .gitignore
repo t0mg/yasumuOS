@@ -1,0 +1,6 @@
+/target/
+/target-arm64/
+/dist/
+/ui-review/
+*.sock
+.DS_Store
