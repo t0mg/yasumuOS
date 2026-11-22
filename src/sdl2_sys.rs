@@ -204,7 +204,9 @@ fn load_controller_mappings() {
     // Also load MustardOS's runtime gamecontrollerdb.txt if present
     let db_paths = [
         "/usr/lib/gamecontrollerdb.txt",
+        "/usr/share/gamecontrollerdb.txt",
         "/opt/muos/device/control/gamecontrollerdb/retro.txt",
+        "/opt/muos/device/control/gamecontrollerdb/modern.txt",
         "/opt/muos/share/info/gamecontrollerdb/retro.txt",
     ];
     for p in db_paths {
@@ -221,6 +223,24 @@ fn load_controller_mappings() {
                 }
             }
         }
+    }
+}
+
+fn detect_device_screen_size(default_w: i32, default_h: i32) -> (i32, i32) {
+    let read_dim = |p: &str| -> Option<i32> {
+        std::fs::read_to_string(p)
+            .ok()?
+            .trim()
+            .parse::<i32>()
+            .ok()
+            .filter(|&v| (240..=3840).contains(&v))
+    };
+    match (
+        read_dim("/opt/muos/device/config/screen/width"),
+        read_dim("/opt/muos/device/config/screen/height"),
+    ) {
+        (Some(w), Some(h)) => (w, h),
+        _ => (default_w, default_h),
     }
 }
 
@@ -252,13 +272,14 @@ impl SdlCanvas {
                 }
             }
 
+            let (win_w, win_h) = detect_device_screen_size(width, height);
             let c_title = CString::new(title).unwrap();
             let window = SDL_CreateWindow(
                 c_title.as_ptr(),
                 SDL_WINDOWPOS_CENTERED,
                 SDL_WINDOWPOS_CENTERED,
-                width,
-                height,
+                win_w,
+                win_h,
                 SDL_WINDOW_SHOWN,
             );
             if window.is_null() {
@@ -314,6 +335,8 @@ impl SdlCanvas {
                 pitch,
             ) == 0
             {
+                let _ = SDL_SetRenderDrawColor(self.renderer, 9, 11, 16, 255);
+                let _ = SDL_RenderClear(self.renderer);
                 let _ = SDL_RenderCopy(
                     self.renderer,
                     self.frame_texture,
