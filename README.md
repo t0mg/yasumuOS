@@ -52,4 +52,4 @@ cargo test
 
 ---
 
-*Nintendo Switch is a trademark of Nintendo. yasumuOS is an independent project and is not affiliated with Nintendo.*
+*yasumuOS is an independent third-party project and is not affiliated with or supported by MustardOS (muOS) or Nintendo. Nintendo Switch is a trademark of Nintendo.*
