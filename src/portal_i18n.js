@@ -23,7 +23,7 @@ const I18N = {
     scrape_need_wifi: 'Requires Home Wi-Fi connection.',
     scrape_ready: 'Fetches missing box art from Libretro Thumbnails.',
     scrape_busy: 'Downloading covers...',
-    sec_maintenance: 'Maintenance', lbl_logging: 'Debug Logging', btn_exit_muos: 'Exit to Standard muOS (1 Session)', btn_poweroff: 'Power Off', btn_uninstall: 'Uninstall yasumuOS',
+    sec_maintenance: 'Maintenance', lbl_logging: 'Debug Logging', btn_exit_muos: 'Exit to Standard muOS (until reboot)', btn_poweroff: 'Power Off', btn_uninstall: 'Uninstall yasumuOS',
     confirm_uninstall: 'Uninstall yasumuOS and restore stock muOS? Your ROMs and saves will not be touched.',
     toast_saved: 'Saved', toast_bonus: '+15m granted', toast_pin: 'PIN updated', toast_wifi: 'Wi-Fi updated', toast_muos: 'Switching to muOS...', toast_poweroff: 'Powering off...', toast_uninstall: 'Uninstalling & rebooting...'
   },
@@ -51,7 +51,7 @@ const I18N = {
     scrape_need_wifi: 'Nécessite une connexion Wi-Fi Maison.',
     scrape_ready: 'Télécharge les jaquettes manquantes (Libretro).',
     scrape_busy: 'Téléchargement en cours...',
-    sec_maintenance: 'Maintenance', lbl_logging: 'Journaux de débogage', btn_exit_muos: 'Quitter vers muOS (1 Session)', btn_poweroff: 'Éteindre la console', btn_uninstall: 'Désinstaller yasumuOS',
+    sec_maintenance: 'Maintenance', lbl_logging: 'Journaux de débogage', btn_exit_muos: 'Quitter vers muOS (jusqu\'au redémarrage)', btn_poweroff: 'Éteindre la console', btn_uninstall: 'Désinstaller yasumuOS',
     confirm_uninstall: 'Désinstaller yasumuOS et restaurer muOS d\'origine ? Vos ROMs et sauvegardes ne seront pas touchées.',
     toast_saved: 'Enregistré', toast_bonus: '+15 min ajoutées', toast_pin: 'Code PIN enregistré', toast_wifi: 'Wi-Fi enregistré', toast_muos: 'Retour vers muOS...', toast_poweroff: 'Extinction...', toast_uninstall: 'Désinstallation et redémarrage...'
   },
@@ -79,7 +79,7 @@ const I18N = {
     scrape_need_wifi: 'Requiere Wi-Fi de casa.',
     scrape_ready: 'Descarga carátulas faltantes (Libretro).',
     scrape_busy: 'Descargando...',
-    sec_maintenance: 'Mantenimiento', lbl_logging: 'Registro de depuración', btn_exit_muos: 'Salir a muOS estándar (1 Sesión)', btn_poweroff: 'Apagar', btn_uninstall: 'Desinstalar yasumuOS',
+    sec_maintenance: 'Mantenimiento', lbl_logging: 'Registro de depuración', btn_exit_muos: 'Salir a muOS estándar (hasta reiniciar)', btn_poweroff: 'Apagar', btn_uninstall: 'Desinstalar yasumuOS',
     confirm_uninstall: '¿Desinstalar yasumuOS y restaurar muOS original? Tus ROMs y partidas no se borrarán.',
     toast_saved: 'Guardado', toast_bonus: '+15 min añadidos', toast_pin: 'PIN actualizado', toast_wifi: 'Wi-Fi guardado', toast_muos: 'Volviendo a muOS...', toast_poweroff: 'Apagando...', toast_uninstall: 'Desinstalando y reiniciando...'
   },
@@ -107,7 +107,7 @@ const I18N = {
     scrape_need_wifi: 'Erfordert Heim-WLAN.',
     scrape_ready: 'Lädt fehlende Cover von Libretro Thumbnails.',
     scrape_busy: 'Lade Cover...',
-    sec_maintenance: 'Wartung', lbl_logging: 'Debug-Protokoll', btn_exit_muos: 'Zu Standard-muOS (1 Sitzung)', btn_poweroff: 'Ausschalten', btn_uninstall: 'yasumuOS deinstallieren',
+    sec_maintenance: 'Wartung', lbl_logging: 'Debug-Protokoll', btn_exit_muos: 'Zu Standard-muOS (bis Neustart)', btn_poweroff: 'Ausschalten', btn_uninstall: 'yasumuOS deinstallieren',
     confirm_uninstall: 'yasumuOS deinstallieren und Standard-muOS wiederherstellen? ROMs und Spielstände bleiben erhalten.',
     toast_saved: 'Gespeichert', toast_bonus: '+15 Min hinzugefügt', toast_pin: 'PIN aktualisiert', toast_wifi: 'WLAN gespeichert', toast_muos: 'Wechsle zu muOS...', toast_poweroff: 'Fahre herunter...', toast_uninstall: 'Deinstalliere & starte neu...'
   },
@@ -135,7 +135,7 @@ const I18N = {
     scrape_need_wifi: 'ホームWi-Fi接続が必要です。',
     scrape_ready: 'Libretro Thumbnailsから画像を取得します。',
     scrape_busy: 'ダウンロード中...',
-    sec_maintenance: 'メンテナンス', lbl_logging: 'デバッグログ', btn_exit_muos: '標準muOSへ切替（1回のみ）', btn_poweroff: '電源オフ', btn_uninstall: 'yasumuOSをアンインストール',
+    sec_maintenance: 'メンテナンス', lbl_logging: 'デバッグログ', btn_exit_muos: '標準muOSへ切替（再起動まで）', btn_poweroff: '電源オフ', btn_uninstall: 'yasumuOSをアンインストール',
     confirm_uninstall: 'yasumuOSを削除して標準のmuOSに戻しますか？ROMやセーブデータは消えません。',
     toast_saved: '保存しました', toast_bonus: '+15分延長しました', toast_pin: 'PINを更新しました', toast_wifi: 'Wi-Fiを保存しました', toast_muos: 'muOSへ切り替えます...', toast_poweroff: '電源を切っています...', toast_uninstall: '削除して再起動しています...'
   },
@@ -163,7 +163,7 @@ const I18N = {
     scrape_need_wifi: '需要连接家庭 Wi-Fi。',
     scrape_ready: '从 Libretro 缩略图库下载缺失封面。',
     scrape_busy: '正在下载封面...',
-    sec_maintenance: '维护', lbl_logging: '调试日志', btn_exit_muos: '切换到标准 muOS（仅本次）', btn_poweroff: '关机', btn_uninstall: '卸载 yasumuOS',
+    sec_maintenance: '维护', lbl_logging: '调试日志', btn_exit_muos: '切换到标准 muOS（直到重启）', btn_poweroff: '关机', btn_uninstall: '卸载 yasumuOS',
     confirm_uninstall: '卸载 yasumuOS 并恢复原版 muOS？你的 ROM 和存档不会被删除。',
     toast_saved: '已保存', toast_bonus: '已延长 15 分钟', toast_pin: 'PIN 码已更新', toast_wifi: 'Wi-Fi 已保存', toast_muos: '正在切换到 muOS...', toast_poweroff: '正在关机...', toast_uninstall: '正在卸载并重启...'
   }

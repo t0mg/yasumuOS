@@ -32,7 +32,7 @@ Requires **MustardOS (muOS 2606.0+)** on a compatible 640×480 Wi-Fi ARM64 handh
 
 On first boot, the launcher opens the Web Portal automatically — scan the QR code from your phone to set a 4-digit PIN and allow your first games.
 
-> **Temporarily use stock muOS**: Open the Web Portal → **System → Exit to Standard muOS (1 Session)** (returns to yasumuOS on next reboot).
+> **Temporarily use stock muOS**: Open the Web Portal → **System → Exit to Standard muOS (until reboot)**.
 
 ## Uninstall
 
