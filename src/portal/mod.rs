@@ -349,10 +349,11 @@ async fn handle_update_schedule(
     }
     guard.store.config.weekly_quotas = req.weekly_quotas.clamped();
     guard.store.config.bedtime = req.bedtime;
-    let now = guard.time.wall_clock_secs();
+    let local = guard.time.local_now(&guard.store.config.timezone);
+    let _ = guard.store.evaluate(&local, false);
     guard
         .store
-        .save_all(now)
+        .save_all(local.epoch_secs)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     Ok(Json(guard.build_portal_state()))
 }

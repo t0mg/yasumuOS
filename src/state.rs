@@ -624,6 +624,15 @@ impl StateStore {
         let mut trigger_5m_warning = false;
         let mut trigger_1m_warning = false;
 
+        // Auto-rearm warnings whenever remaining time is above a threshold
+        // (e.g. after raising daily quota, pushing bedtime later, or granting bonus time).
+        if effective_remaining_seconds > 300 {
+            self.usage.warned_5m_today = false;
+            self.usage.warned_1m_today = false;
+        } else if effective_remaining_seconds > 60 {
+            self.usage.warned_1m_today = false;
+        }
+
         if effective_remaining_seconds <= 60 && effective_remaining_seconds > 0 {
             if !self.usage.warned_1m_today {
                 trigger_1m_warning = true;
