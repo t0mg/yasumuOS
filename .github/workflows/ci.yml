@@ -78,6 +78,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release create "$GITHUB_REF_NAME" \
+            --repo "$GITHUB_REPOSITORY" \
             dist/yasumuOS.muxapp \
             dist/yasumuOS-installer.tar.gz \
             --title "yasumuOS $GITHUB_REF_NAME" \
