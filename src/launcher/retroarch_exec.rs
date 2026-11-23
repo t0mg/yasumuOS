@@ -26,6 +26,10 @@ fn find_retroarch_binary() -> String {
 
 fn find_retroarch_base_cfg() -> Option<PathBuf> {
     let candidates = [
+        "/opt/muos/share/info/config/retroarch.cfg",
+        "/run/muos/storage/info/config/retroarch.cfg",
+        "/mnt/mmc/MUOS/info/config/retroarch.cfg",
+        "/opt/muos/device/control/retroarch.cfg",
         "/opt/muos/share/emulator/retroarch/retroarch.cfg",
         "/mnt/mmc/MUOS/retroarch/retroarch.cfg",
         "/run/muos/storage/retroarch/retroarch.cfg",
@@ -178,6 +182,26 @@ fn sanitize_autoconfig_contents(raw: &str) -> (String, Option<String>) {
     (out, menu_btn)
 }
 
+fn extract_menu_btn_from_cfg(cfg_path: &Path) -> Option<String> {
+    let contents = fs::read_to_string(cfg_path).ok()?;
+    let mut fallback_menu: Option<String> = None;
+    for line in contents.lines() {
+        let trimmed = line.trim();
+        let Some((k, _)) = trimmed.split_once('=') else {
+            continue;
+        };
+        let key = k.trim();
+        if key == "input_enable_hotkey_btn" {
+            if let Some(val) = extract_cfg_value(trimmed) {
+                return Some(val);
+            }
+        } else if key == "input_menu_toggle_btn" && fallback_menu.is_none() {
+            fallback_menu = extract_cfg_value(trimmed);
+        }
+    }
+    fallback_menu
+}
+
 fn find_retroarch_autoconfig_dir(base_cfg: Option<&Path>) -> Option<PathBuf> {
     if let Some(cfg_path) = base_cfg {
         if let Ok(contents) = fs::read_to_string(cfg_path) {
@@ -201,6 +225,7 @@ fn find_retroarch_autoconfig_dir(base_cfg: Option<&Path>) -> Option<PathBuf> {
         }
     }
     for candidate in [
+        "/opt/muos/share/info/config/autoconfig",
         "/opt/muos/share/emulator/retroarch/autoconfig",
         "/mnt/mmc/MUOS/retroarch/autoconfig",
         "/run/muos/storage/retroarch/autoconfig",
@@ -296,21 +321,50 @@ pub(super) fn execute_retroarch_game(socket_path: &Path, game: &DiscoveredGame, 
         eprintln!("[yasumu-launcher] RetroArch OSD font: {} (size={})", font_path.display(), osd_font_size);
         dynamic_cfg.push_str(&format!("video_font_path = \"{}\"\n", font_path.display()));
     }
-    if let Some((locked_dir, menu_btn)) = prepare_locked_autoconfig_dir(base_cfg.as_deref()) {
+    let autoconfig_result = prepare_locked_autoconfig_dir(base_cfg.as_deref());
+    let base_menu_btn = base_cfg.as_deref().and_then(extract_menu_btn_from_cfg);
+
+    if let Some((locked_dir, menu_btn)) = autoconfig_result {
         dynamic_cfg.push_str(&format!(
             "joypad_autoconfig_dir = \"{}\"\n",
             locked_dir.display()
         ));
-        let exit_btn = menu_btn.unwrap_or_else(|| "10".to_string());
+        let exit_btn = menu_btn
+            .or(base_menu_btn)
+            .unwrap_or_else(|| "10".to_string());
+        dynamic_cfg.push_str(&format!("input_exit_emulator_btn = \"{}\"\n", exit_btn));
+    } else if base_cfg.is_some() {
+        let exit_btn = base_menu_btn.unwrap_or_else(|| "10".to_string());
         dynamic_cfg.push_str(&format!("input_exit_emulator_btn = \"{}\"\n", exit_btn));
     } else {
-        dynamic_cfg.push_str("input_exit_emulator_btn = \"10\"\n");
+        // Safety fallback if neither stock retroarch.cfg nor autoconfig dir was found:
+        // bind standard muOS-Keys udev layout so controls can never go dead.
+        dynamic_cfg.push_str(
+            "input_driver = \"udev\"\n\
+             input_joypad_driver = \"udev\"\n\
+             input_autodetect_enable = \"false\"\n\
+             input_player1_a_btn = \"0\"\n\
+             input_player1_b_btn = \"1\"\n\
+             input_player1_x_btn = \"2\"\n\
+             input_player1_y_btn = \"3\"\n\
+             input_player1_l_btn = \"4\"\n\
+             input_player1_r_btn = \"5\"\n\
+             input_player1_l2_btn = \"6\"\n\
+             input_player1_r2_btn = \"7\"\n\
+             input_player1_select_btn = \"8\"\n\
+             input_player1_start_btn = \"9\"\n\
+             input_player1_up_btn = \"h0up\"\n\
+             input_player1_down_btn = \"h0down\"\n\
+             input_player1_left_btn = \"h0left\"\n\
+             input_player1_right_btn = \"h0right\"\n\
+             input_exit_emulator_btn = \"10\"\n",
+        );
     }
     let _ = fs::write(lang_cfg_path, dynamic_cfg);
 
     let mut cmd = Command::new(&retroarch_bin);
-    if let Some(base_cfg) = base_cfg {
-        cmd.arg("-c").arg(base_cfg);
+    if let Some(ref base) = base_cfg {
+        cmd.arg("-c").arg(base);
     }
     if Path::new(&override_cfg).is_file() {
         cmd.arg("--appendconfig")
@@ -321,8 +375,9 @@ pub(super) fn execute_retroarch_game(socket_path: &Path, game: &DiscoveredGame, 
     cmd.arg("-L").arg(&core_path).arg(&game.rom_path);
 
     eprintln!(
-        "[yasumu-launcher] spawning RetroArch: bin={} core={} (exists={}) rom={}",
+        "[yasumu-launcher] spawning RetroArch: bin={} base_cfg={:?} core={} (exists={}) rom={}",
         retroarch_bin,
+        base_cfg,
         core_path.display(),
         core_path.is_file(),
         game.rom_path
