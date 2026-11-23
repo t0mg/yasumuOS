@@ -188,6 +188,159 @@ fn sanitize_base_cfg_contents(raw: &str) -> (String, Option<String>, bool) {
     (out, menu_btn.or(fallback_menu_btn), has_player1_binds)
 }
 
+/// Returns true if an `input_*` key inside a RetroArch autoconfig `.cfg` file is a
+/// device identity or RetroPad gameplay control (never a hotkey/menu/cheat/state binding).
+fn is_allowed_autoconfig_key(key: &str) -> bool {
+    if !key.starts_with("input_") {
+        return true;
+    }
+    matches!(
+        key,
+        "input_driver" | "input_device" | "input_vendor_id" | "input_product_id"
+    ) || [
+        "input_a_",
+        "input_b_",
+        "input_x_",
+        "input_y_",
+        "input_l_",
+        "input_r_",
+        "input_l2_",
+        "input_r2_",
+        "input_l3_",
+        "input_r3_",
+        "input_select_",
+        "input_start_",
+        "input_up_",
+        "input_down_",
+        "input_left_",
+        "input_right_",
+    ]
+    .iter()
+    .any(|p| key.starts_with(p))
+}
+
+fn sanitize_autoconfig_contents(raw: &str) -> String {
+    let mut out = String::with_capacity(raw.len());
+    for line in raw.lines() {
+        let trimmed = line.trim();
+        let key = trimmed
+            .split_once('=')
+            .map(|(k, _)| k.trim())
+            .unwrap_or("");
+        if !is_allowed_autoconfig_key(key) {
+            continue;
+        }
+        out.push_str(line);
+        out.push('\n');
+    }
+    out
+}
+
+fn find_retroarch_autoconfig_dir(base_cfg: Option<&Path>) -> Option<PathBuf> {
+    if let Some(cfg_path) = base_cfg {
+        if let Ok(contents) = fs::read_to_string(cfg_path) {
+            for line in contents.lines() {
+                let trimmed = line.trim();
+                if let Some((k, _)) = trimmed.split_once('=') {
+                    if k.trim() == "joypad_autoconfig_dir" {
+                        if let Some(val) = extract_cfg_value(trimmed) {
+                            let expanded = if let Some(rest) = val.strip_prefix("~/") {
+                                PathBuf::from("/root").join(rest)
+                            } else {
+                                PathBuf::from(&val)
+                            };
+                            if expanded.is_dir() {
+                                return Some(expanded);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    for candidate in [
+        "/opt/muos/share/info/config/autoconfig",
+        "/opt/muos/share/emulator/retroarch/autoconfig",
+        "/mnt/mmc/MUOS/retroarch/autoconfig",
+        "/run/muos/storage/retroarch/autoconfig",
+    ] {
+        let p = PathBuf::from(candidate);
+        if p.is_dir() {
+            return Some(p);
+        }
+    }
+    None
+}
+
+fn prepare_locked_autoconfig_dir(base_cfg: Option<&Path>) -> Option<PathBuf> {
+    let src_dir = find_retroarch_autoconfig_dir(base_cfg)?;
+    let dst_dir = PathBuf::from("/tmp/yasumu-autoconfig");
+    let _ = fs::remove_dir_all(&dst_dir);
+    fs::create_dir_all(&dst_dir).ok()?;
+
+    let mut count = 0usize;
+    for entry in walkdir::WalkDir::new(&src_dir)
+        .max_depth(3)
+        .into_iter()
+        .filter_map(|e| e.ok())
+    {
+        let path = entry.path();
+        if !path.is_file() {
+            continue;
+        }
+        let is_cfg = path
+            .extension()
+            .and_then(|e| e.to_str())
+            .map(|e| e.eq_ignore_ascii_case("cfg"))
+            .unwrap_or(false);
+        if !is_cfg {
+            continue;
+        }
+        // Only sanitize built-in handheld profiles (fast, skips 900+ desktop USB controllers)
+        let fname_lower = path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("")
+            .to_ascii_lowercase();
+        let is_handheld = fname_lower.contains("muos")
+            || fname_lower.contains("anbernic")
+            || fname_lower.contains("trimui")
+            || fname_lower.contains("miyoo")
+            || fname_lower.contains("retrogame")
+            || fname_lower.contains("rg35")
+            || fname_lower.contains("rg40")
+            || fname_lower.contains("rg28")
+            || fname_lower.contains("cube");
+        if !is_handheld {
+            continue;
+        }
+        let Ok(rel) = path.strip_prefix(&src_dir) else {
+            continue;
+        };
+        let Ok(raw) = fs::read_to_string(path) else {
+            continue;
+        };
+        let target = dst_dir.join(rel);
+        if let Some(parent) = target.parent() {
+            let _ = fs::create_dir_all(parent);
+        }
+        if fs::write(&target, sanitize_autoconfig_contents(&raw)).is_ok() {
+            count += 1;
+        }
+    }
+
+    if count == 0 {
+        return None;
+    }
+    eprintln!(
+        "[yasumu-launcher] locked handheld autoconfigs: {} -> {} ({} files)",
+        src_dir.display(),
+        dst_dir.display(),
+        count
+    );
+    Some(dst_dir)
+}
+
 pub(super) fn execute_retroarch_game(socket_path: &Path, game: &DiscoveredGame, lang: Language) {
     let retroarch_bin = find_retroarch_binary();
     let core_path = find_libretro_core(&game.core_so);
@@ -240,11 +393,20 @@ pub(super) fn execute_retroarch_game(socket_path: &Path, game: &DiscoveredGame, 
         }
     }
 
-    if !has_player1_binds {
-        // Guaranteed fallback if stock retroarch.cfg wasn't found or lacked player1 bindings
+    let locked_autoconfig = prepare_locked_autoconfig_dir(base_cfg.as_deref());
+    if let Some(ref locked_dir) = locked_autoconfig {
+        dynamic_cfg.push_str(&format!(
+            "joypad_autoconfig_dir = \"{}\"\n",
+            locked_dir.display()
+        ));
+    }
+
+    if !has_player1_binds && locked_autoconfig.is_none() {
+        // Guaranteed fallback only if neither stock retroarch.cfg nor handheld autoconfigs were found
         dynamic_cfg.push_str(
             "input_driver = \"udev\"\n\
              input_joypad_driver = \"udev\"\n\
+             input_autodetect_enable = \"false\"\n\
              input_player1_a_btn = \"0\"\n\
              input_player1_b_btn = \"1\"\n\
              input_player1_x_btn = \"2\"\n\
