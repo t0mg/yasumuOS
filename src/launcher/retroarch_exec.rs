@@ -176,6 +176,9 @@ fn sanitize_base_cfg_contents(raw: &str) -> (String, Option<String>, bool) {
         }
 
         if !is_allowed_input_key(key) {
+            if !key.is_empty() {
+                out.push_str(&format!("{} = \"nul\"\n", key));
+            }
             continue;
         }
         out.push_str(line);
@@ -332,15 +335,15 @@ input_rewind_btn = "4"
         assert!(sanitized.contains("input_driver = \"udev\""));
         assert!(sanitized.contains("input_player1_a_btn = \"0\""));
         assert!(sanitized.contains("input_player1_l_x_plus_axis = \"+0\""));
-        assert!(!sanitized.contains("input_enable_hotkey_btn"));
-        assert!(!sanitized.contains("input_menu_toggle_btn"));
-        assert!(!sanitized.contains("input_fps_toggle_btn"));
-        assert!(!sanitized.contains("input_hold_slowmotion_btn"));
-        assert!(!sanitized.contains("input_toggle_slowmotion_btn"));
-        assert!(!sanitized.contains("input_save_state_btn"));
-        assert!(!sanitized.contains("input_load_state_btn"));
-        assert!(!sanitized.contains("input_toggle_fast_forward_btn"));
-        assert!(!sanitized.contains("input_rewind_btn"));
+        assert!(sanitized.contains("input_enable_hotkey_btn = \"nul\""));
+        assert!(sanitized.contains("input_menu_toggle_btn = \"nul\""));
+        assert!(sanitized.contains("input_fps_toggle_btn = \"nul\""));
+        assert!(sanitized.contains("input_hold_slowmotion_btn = \"nul\""));
+        assert!(sanitized.contains("input_toggle_slowmotion_btn = \"nul\""));
+        assert!(sanitized.contains("input_save_state_btn = \"nul\""));
+        assert!(sanitized.contains("input_load_state_btn = \"nul\""));
+        assert!(sanitized.contains("input_toggle_fast_forward_btn = \"nul\""));
+        assert!(sanitized.contains("input_rewind_btn = \"nul\""));
     }
 }
 
