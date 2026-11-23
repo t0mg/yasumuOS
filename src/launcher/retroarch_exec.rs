@@ -112,30 +112,6 @@ fn find_retroarch_ttf_font() -> Option<PathBuf> {
     None
 }
 
-/// Keys stripped from stock RetroArch autoconfig `.cfg` files so in-game menus,
-/// save-state hotkeys, fast-forward, and cheats stay locked down on every device.
-const LOCKED_AUTOCONFIG_PREFIXES: &[&str] = &[
-    "input_menu_toggle",
-    "input_enable_hotkey",
-    "input_exit_emulator",
-    "input_save_state",
-    "input_load_state",
-    "input_state_slot",
-    "input_reset",
-    "input_toggle_fast_forward",
-    "input_hold_fast_forward",
-    "input_rewind",
-    "input_pause_toggle",
-    "input_fps_toggle",
-    "input_screenshot",
-    "input_shader",
-    "input_cheat",
-    "input_disk",
-    "input_netplay",
-    "input_ai_service",
-    "input_volume",
-];
-
 fn extract_cfg_value(line: &str) -> Option<String> {
     let (_, rhs) = line.split_once('=')?;
     let v = rhs.trim().trim_matches('"').trim();
@@ -146,14 +122,39 @@ fn extract_cfg_value(line: &str) -> Option<String> {
     }
 }
 
-/// Sanitizes a single RetroArch autoconfig `.cfg` file:
-/// - Preserves all gameplay controls (D-pad, A/B/X/Y, L/R/L2/R2/L3/R3, Select, Start, analog sticks).
-/// - Strips all RetroArch menu/hotkey/cheat/state-slot bindings.
-/// - Extracts the device's `MENU` / hotkey button and rebinds it to `input_exit_emulator_btn`
-///   (paired with `quit_press_twice = "true"` so holding MENU + VOL+/- still works).
-fn sanitize_autoconfig_contents(raw: &str) -> (String, Option<String>) {
-    let mut out = String::with_capacity(raw.len() + 64);
+/// Returns true if an `input_*` RetroArch config key is a safe gameplay/driver setting
+/// (never a hotkey like FPS, slow-motion, rewind, menu toggle, save/load state, etc.).
+fn is_allowed_input_key(key: &str) -> bool {
+    if !key.starts_with("input_") {
+        return true;
+    }
+    key.starts_with("input_player1_")
+        || matches!(
+            key,
+            "input_driver"
+                | "input_joypad_driver"
+                | "input_max_users"
+                | "input_axis_threshold"
+                | "input_analog_deadzone"
+                | "input_analog_sensitivity"
+                | "input_poll_type_behavior"
+                | "input_remap_binds_enable"
+                | "input_auto_game_focus"
+        )
+}
+
+/// Sanitizes a stock muOS `retroarch.cfg` into a locked-down base config:
+/// - Preserves all video/audio/directory settings and all `input_player1_*` gameplay controls
+///   (D-pad, face buttons, shoulders, L2/R2, Select, Start, and analog sticks).
+/// - Strips every other `input_*` hotkey/menu/slow-motion/FPS/rewind/cheat binding so nothing
+///   can fire without a hotkey modifier.
+/// - Extracts the device's configured `MENU` button (`input_enable_hotkey_btn` / `input_menu_toggle_btn`)
+///   so we can bind it to double-tap exit (`input_exit_emulator_btn`).
+fn sanitize_base_cfg_contents(raw: &str) -> (String, Option<String>, bool) {
+    let mut out = String::with_capacity(raw.len());
     let mut menu_btn: Option<String> = None;
+    let mut fallback_menu_btn: Option<String> = None;
+    let mut has_player1_binds = false;
 
     for line in raw.lines() {
         let trimmed = line.trim();
@@ -162,139 +163,26 @@ fn sanitize_autoconfig_contents(raw: &str) -> (String, Option<String>) {
             .map(|(k, _)| k.trim())
             .unwrap_or("");
 
-        if key == "input_enable_hotkey_btn" || (menu_btn.is_none() && key == "input_menu_toggle_btn")
-        {
+        if key == "input_enable_hotkey_btn" {
             if let Some(val) = extract_cfg_value(trimmed) {
                 menu_btn = Some(val);
             }
+        } else if key == "input_menu_toggle_btn" && fallback_menu_btn.is_none() {
+            fallback_menu_btn = extract_cfg_value(trimmed);
         }
 
-        if LOCKED_AUTOCONFIG_PREFIXES.iter().any(|p| key.starts_with(p)) {
+        if key == "input_player1_a_btn" && extract_cfg_value(trimmed).is_some() {
+            has_player1_binds = true;
+        }
+
+        if !is_allowed_input_key(key) {
             continue;
         }
         out.push_str(line);
         out.push('\n');
     }
 
-    if let Some(ref btn) = menu_btn {
-        out.push_str(&format!("input_exit_emulator_btn = \"{}\"\n", btn));
-    }
-    (out, menu_btn)
-}
-
-fn extract_menu_btn_from_cfg(cfg_path: &Path) -> Option<String> {
-    let contents = fs::read_to_string(cfg_path).ok()?;
-    let mut fallback_menu: Option<String> = None;
-    for line in contents.lines() {
-        let trimmed = line.trim();
-        let Some((k, _)) = trimmed.split_once('=') else {
-            continue;
-        };
-        let key = k.trim();
-        if key == "input_enable_hotkey_btn" {
-            if let Some(val) = extract_cfg_value(trimmed) {
-                return Some(val);
-            }
-        } else if key == "input_menu_toggle_btn" && fallback_menu.is_none() {
-            fallback_menu = extract_cfg_value(trimmed);
-        }
-    }
-    fallback_menu
-}
-
-fn find_retroarch_autoconfig_dir(base_cfg: Option<&Path>) -> Option<PathBuf> {
-    if let Some(cfg_path) = base_cfg {
-        if let Ok(contents) = fs::read_to_string(cfg_path) {
-            for line in contents.lines() {
-                let trimmed = line.trim();
-                if let Some((k, _)) = trimmed.split_once('=') {
-                    if k.trim() == "joypad_autoconfig_dir" {
-                        if let Some(val) = extract_cfg_value(trimmed) {
-                            let expanded = if let Some(rest) = val.strip_prefix("~/") {
-                                PathBuf::from("/root").join(rest)
-                            } else {
-                                PathBuf::from(&val)
-                            };
-                            if expanded.is_dir() {
-                                return Some(expanded);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-    for candidate in [
-        "/opt/muos/share/info/config/autoconfig",
-        "/opt/muos/share/emulator/retroarch/autoconfig",
-        "/mnt/mmc/MUOS/retroarch/autoconfig",
-        "/run/muos/storage/retroarch/autoconfig",
-        "/opt/muos/config/retroarch/autoconfig",
-    ] {
-        let p = PathBuf::from(candidate);
-        if p.is_dir() {
-            return Some(p);
-        }
-    }
-    None
-}
-
-fn prepare_locked_autoconfig_dir(base_cfg: Option<&Path>) -> Option<(PathBuf, Option<String>)> {
-    let src_dir = find_retroarch_autoconfig_dir(base_cfg)?;
-    let dst_dir = PathBuf::from("/tmp/yasumu-autoconfig");
-    let _ = fs::remove_dir_all(&dst_dir);
-    fs::create_dir_all(&dst_dir).ok()?;
-
-    let mut count = 0usize;
-    let mut detected_menu_btn: Option<String> = None;
-
-    for entry in walkdir::WalkDir::new(&src_dir)
-        .max_depth(3)
-        .into_iter()
-        .filter_map(|e| e.ok())
-    {
-        let path = entry.path();
-        if !path.is_file() {
-            continue;
-        }
-        let is_cfg = path
-            .extension()
-            .and_then(|e| e.to_str())
-            .map(|e| e.eq_ignore_ascii_case("cfg"))
-            .unwrap_or(false);
-        if !is_cfg {
-            continue;
-        }
-        let Ok(rel) = path.strip_prefix(&src_dir) else {
-            continue;
-        };
-        let Ok(raw) = fs::read_to_string(path) else {
-            continue;
-        };
-        let (sanitized, menu_btn) = sanitize_autoconfig_contents(&raw);
-        if detected_menu_btn.is_none() {
-            detected_menu_btn = menu_btn;
-        }
-        let target = dst_dir.join(rel);
-        if let Some(parent) = target.parent() {
-            let _ = fs::create_dir_all(parent);
-        }
-        if fs::write(&target, sanitized).is_ok() {
-            count += 1;
-        }
-    }
-
-    if count == 0 {
-        return None;
-    }
-    eprintln!(
-        "[yasumu-launcher] locked autoconfig: {} -> {} ({} files, menu_btn={:?})",
-        src_dir.display(),
-        dst_dir.display(),
-        count,
-        detected_menu_btn
-    );
-    Some((dst_dir, detected_menu_btn))
+    (out, menu_btn.or(fallback_menu_btn), has_player1_binds)
 }
 
 pub(super) fn execute_retroarch_game(socket_path: &Path, game: &DiscoveredGame, lang: Language) {
@@ -305,12 +193,11 @@ pub(super) fn execute_retroarch_game(socket_path: &Path, game: &DiscoveredGame, 
         .or_else(|_| std::env::var("QUOS_RETROARCH_CFG"))
         .unwrap_or_else(|_| "/opt/yasumu/retroarch-override.cfg".to_string());
 
-    // Write dynamic RetroArch user_language + discovered TrueType OSD font + per-system font size (+50%)
+    // Write dynamic RetroArch user_language + discovered TrueType OSD font + readable font size
     let lang_cfg_path = "/tmp/yasumu-lang.cfg";
     let osd_font_size = match game.system_badge.as_str() {
-        "GB" | "GBC" => "27.000000",
-        "GBA" => "30.000000",
-        _ => "42.000000",
+        "GB" | "GBC" | "GBA" => "20.000000",
+        _ => "22.000000",
     };
     let mut dynamic_cfg = format!(
         "user_language = \"{}\"\nvideo_font_size = \"{}\"\n",
@@ -318,31 +205,43 @@ pub(super) fn execute_retroarch_game(socket_path: &Path, game: &DiscoveredGame, 
         osd_font_size
     );
     if let Some(font_path) = find_retroarch_ttf_font() {
-        eprintln!("[yasumu-launcher] RetroArch OSD font: {} (size={})", font_path.display(), osd_font_size);
+        eprintln!(
+            "[yasumu-launcher] RetroArch OSD font: {} (size={})",
+            font_path.display(),
+            osd_font_size
+        );
         dynamic_cfg.push_str(&format!("video_font_path = \"{}\"\n", font_path.display()));
     }
-    let autoconfig_result = prepare_locked_autoconfig_dir(base_cfg.as_deref());
-    let base_menu_btn = base_cfg.as_deref().and_then(extract_menu_btn_from_cfg);
 
-    if let Some((locked_dir, menu_btn)) = autoconfig_result {
-        dynamic_cfg.push_str(&format!(
-            "joypad_autoconfig_dir = \"{}\"\n",
-            locked_dir.display()
-        ));
-        let exit_btn = menu_btn
-            .or(base_menu_btn)
-            .unwrap_or_else(|| "10".to_string());
-        dynamic_cfg.push_str(&format!("input_exit_emulator_btn = \"{}\"\n", exit_btn));
-    } else if base_cfg.is_some() {
-        let exit_btn = base_menu_btn.unwrap_or_else(|| "10".to_string());
-        dynamic_cfg.push_str(&format!("input_exit_emulator_btn = \"{}\"\n", exit_btn));
-    } else {
-        // Safety fallback if neither stock retroarch.cfg nor autoconfig dir was found:
-        // bind standard muOS-Keys udev layout so controls can never go dead.
+    let sanitized_base_path = PathBuf::from("/tmp/yasumu-base.cfg");
+    let mut effective_base_cfg: Option<PathBuf> = None;
+    let mut has_player1_binds = false;
+    let mut exit_btn = "10".to_string();
+
+    if let Some(ref base) = base_cfg {
+        if let Ok(raw) = fs::read_to_string(base) {
+            let (sanitized, menu_btn, p1_ok) = sanitize_base_cfg_contents(&raw);
+            if let Some(btn) = menu_btn {
+                exit_btn = btn;
+            }
+            has_player1_binds = p1_ok;
+            if fs::write(&sanitized_base_path, sanitized).is_ok() {
+                effective_base_cfg = Some(sanitized_base_path.clone());
+            }
+            eprintln!(
+                "[yasumu-launcher] sanitized base_cfg={} (p1_binds={}, menu_btn={})",
+                base.display(),
+                has_player1_binds,
+                exit_btn
+            );
+        }
+    }
+
+    if !has_player1_binds {
+        // Guaranteed fallback if stock retroarch.cfg wasn't found or lacked player1 bindings
         dynamic_cfg.push_str(
             "input_driver = \"udev\"\n\
              input_joypad_driver = \"udev\"\n\
-             input_autodetect_enable = \"false\"\n\
              input_player1_a_btn = \"0\"\n\
              input_player1_b_btn = \"1\"\n\
              input_player1_x_btn = \"2\"\n\
@@ -356,14 +255,14 @@ pub(super) fn execute_retroarch_game(socket_path: &Path, game: &DiscoveredGame, 
              input_player1_up_btn = \"h0up\"\n\
              input_player1_down_btn = \"h0down\"\n\
              input_player1_left_btn = \"h0left\"\n\
-             input_player1_right_btn = \"h0right\"\n\
-             input_exit_emulator_btn = \"10\"\n",
+             input_player1_right_btn = \"h0right\"\n",
         );
     }
+    dynamic_cfg.push_str(&format!("input_exit_emulator_btn = \"{}\"\n", exit_btn));
     let _ = fs::write(lang_cfg_path, dynamic_cfg);
 
     let mut cmd = Command::new(&retroarch_bin);
-    if let Some(ref base) = base_cfg {
+    if let Some(ref base) = effective_base_cfg {
         cmd.arg("-c").arg(base);
     }
     if Path::new(&override_cfg).is_file() {
@@ -377,7 +276,7 @@ pub(super) fn execute_retroarch_game(socket_path: &Path, game: &DiscoveredGame, 
     eprintln!(
         "[yasumu-launcher] spawning RetroArch: bin={} base_cfg={:?} core={} (exists={}) rom={}",
         retroarch_bin,
-        base_cfg,
+        effective_base_cfg,
         core_path.display(),
         core_path.is_file(),
         game.rom_path
@@ -394,7 +293,10 @@ pub(super) fn execute_retroarch_game(socket_path: &Path, game: &DiscoveredGame, 
             let _ = send_ipc_request(socket_path, &IpcRequest::NotifyGamePid { pid: None });
         }
         Err(e) => {
-            eprintln!("[yasumu-launcher] failed to spawn RetroArch ({}): {}", retroarch_bin, e);
+            eprintln!(
+                "[yasumu-launcher] failed to spawn RetroArch ({}): {}",
+                retroarch_bin, e
+            );
         }
     }
 }
@@ -404,32 +306,41 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_sanitize_autoconfig_preserves_gameplay_and_locks_hotkeys() {
+    fn test_sanitize_base_cfg_preserves_gameplay_and_strips_all_hotkeys() {
         let sample = r#"
+video_driver = "gl"
 input_driver = "udev"
-input_device = "muOS-Keys"
-input_a_btn = "0"
-input_b_btn = "1"
-input_l_x_plus_axis = "+0"
-input_l_x_minus_axis = "-0"
+input_joypad_driver = "udev"
+input_player1_a_btn = "0"
+input_player1_b_btn = "1"
+input_player1_l_x_plus_axis = "+0"
+input_player1_l_x_minus_axis = "-0"
 input_enable_hotkey_btn = "10"
 input_menu_toggle_btn = "2"
-input_exit_emulator_btn = "9"
+input_fps_toggle_btn = "3"
+input_hold_slowmotion_btn = "7"
+input_toggle_slowmotion_btn = "6"
 input_save_state_btn = "5"
 input_load_state_btn = "4"
 input_toggle_fast_forward_btn = "6"
+input_rewind_btn = "4"
 "#;
-        let (sanitized, menu_btn) = sanitize_autoconfig_contents(sample);
+        let (sanitized, menu_btn, has_p1) = sanitize_base_cfg_contents(sample);
+        assert!(has_p1);
         assert_eq!(menu_btn.as_deref(), Some("10"));
-        assert!(sanitized.contains("input_a_btn = \"0\""));
-        assert!(sanitized.contains("input_l_x_plus_axis = \"+0\""));
-        assert!(sanitized.contains("input_exit_emulator_btn = \"10\""));
+        assert!(sanitized.contains("video_driver = \"gl\""));
+        assert!(sanitized.contains("input_driver = \"udev\""));
+        assert!(sanitized.contains("input_player1_a_btn = \"0\""));
+        assert!(sanitized.contains("input_player1_l_x_plus_axis = \"+0\""));
         assert!(!sanitized.contains("input_enable_hotkey_btn"));
         assert!(!sanitized.contains("input_menu_toggle_btn"));
+        assert!(!sanitized.contains("input_fps_toggle_btn"));
+        assert!(!sanitized.contains("input_hold_slowmotion_btn"));
+        assert!(!sanitized.contains("input_toggle_slowmotion_btn"));
         assert!(!sanitized.contains("input_save_state_btn"));
         assert!(!sanitized.contains("input_load_state_btn"));
         assert!(!sanitized.contains("input_toggle_fast_forward_btn"));
-        assert!(!sanitized.contains("input_exit_emulator_btn = \"9\""));
+        assert!(!sanitized.contains("input_rewind_btn"));
     }
 }
 
