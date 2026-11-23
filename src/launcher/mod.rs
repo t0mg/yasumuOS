@@ -13,7 +13,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum InputAction {
     Up,
@@ -58,6 +58,7 @@ pub struct LauncherApp {
     pub exit_to_muos: bool,
     pub pending_game: Option<DiscoveredGame>,
     pub marquee_started_at: Instant,
+    pub input_cooldown_until: Option<Instant>,
 }
 
 impl LauncherApp {
@@ -79,6 +80,7 @@ impl LauncherApp {
             exit_to_muos: false,
             pending_game: None,
             marquee_started_at: Instant::now(),
+            input_cooldown_until: None,
         })
     }
 
@@ -92,12 +94,17 @@ impl LauncherApp {
 
     pub fn refresh_status(&mut self) {
         if let Ok(st) = Self::fetch_status(&self.socket_path) {
+            let was_unlocked = self.status.lock_status == LockStatus::Unlocked;
             if st.exit_to_muos_requested {
                 self.exit_to_muos = true;
                 self.should_exit = true;
             }
             if matches!(self.screen, UiScreen::ParentPortal) && !st.portal_active {
                 self.screen = UiScreen::MainOrLock;
+            }
+            if was_unlocked && st.lock_status != LockStatus::Unlocked {
+                // Ignore trailing gameplay button presses for 2s when a lock screen appears
+                self.input_cooldown_until = Some(Instant::now() + Duration::from_secs(2));
             }
             self.status = st;
             let total_entries = self.total_list_items();
@@ -533,7 +540,17 @@ pub fn run_launcher(
             let mut frame_counter = 0u32;
             let mut dirty = true;
             while !app.should_exit && app.pending_game.is_none() {
+                let cooling_down = app
+                    .input_cooldown_until
+                    .map(|until| Instant::now() < until)
+                    .unwrap_or(false);
+                if !cooling_down {
+                    app.input_cooldown_until = None;
+                }
                 while let Some(action) = poll_input_action(canvas.has_game_controller) {
+                    if cooling_down && action != InputAction::QuitApp {
+                        continue;
+                    }
                     app.handle_action(action);
                     dirty = true;
                 }
@@ -561,6 +578,9 @@ pub fn run_launcher(
             let lang = Language::from_code(&app.status.language);
             execute_retroarch_game(&socket_path, &game, lang);
             app.refresh_status();
+            if app.status.lock_status != LockStatus::Unlocked {
+                app.input_cooldown_until = Some(Instant::now() + Duration::from_secs(2));
+            }
         }
     }
 
