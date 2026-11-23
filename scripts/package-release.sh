@@ -41,6 +41,11 @@ fi
 if [ -f "${ROOT_DIR}/assets/fonts/CJK-Fallback.ttf" ]; then
     cp -f "${ROOT_DIR}/assets/fonts/CJK-Fallback.ttf" "${APP_BIN}/cjk-fallback.ttf"
 fi
+if [ -f "${ROOT_DIR}/assets/app-icon.png" ]; then
+    mkdir -p "${APP_DIR}/glyph"
+    cp -f "${ROOT_DIR}/assets/app-icon.png" "${APP_DIR}/glyph/yasumuos.png"
+    cp -f "${ROOT_DIR}/assets/app-icon.png" "${APP_DIR}/glyph/yasumuOS.png"
+fi
 
 # muOS Application entry point: installs/upgrades yasumuOS atomically and reboots into it
 cat > "${APP_DIR}/mux_launch.sh" <<'EOF'
