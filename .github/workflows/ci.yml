@@ -3,6 +3,7 @@ name: yasumuOS CI
 on:
   push:
     branches: ["main", "master"]
+    tags: ["v*"]
   pull_request:
 
 jobs:
@@ -58,3 +59,26 @@ jobs:
           path: |
             dist/yasumuOS.muxapp
             dist/yasumuOS-installer.tar.gz
+
+  release:
+    name: Publish GitHub Release
+    needs: [test-x86_64, cross-compile-arm64]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download release archives
+        uses: actions/download-artifact@v4
+        with:
+          name: yasumuOS-release
+          path: dist
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            dist/yasumuOS.muxapp \
+            dist/yasumuOS-installer.tar.gz \
+            --title "yasumuOS $GITHUB_REF_NAME" \
+            --generate-notes
